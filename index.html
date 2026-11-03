@@ -1,0 +1,101 @@
+<!doctype html>
+<html lang="vi">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>PID Playground</title>
+<style>
+:root{color-scheme:dark;--bg:#0b1220;--panel:#121d30;--line:#263650;--text:#e8eef8;--muted:#9aabc3;--accent:#68b5ff;--green:#5ed6a0}
+*{box-sizing:border-box}body{margin:0;background:radial-gradient(circle at 20% 0%,#172b48 0,#0b1220 45%);color:var(--text);font:15px/1.5 system-ui,-apple-system,Segoe UI,sans-serif}
+main{max-width:1100px;margin:36px auto;padding:0 20px}.top{display:flex;justify-content:space-between;align-items:end;gap:16px;flex-wrap:wrap;margin-bottom:22px}
+h1{font-size:clamp(28px,5vw,42px);margin:0;letter-spacing:-1.3px}.sub{color:var(--muted);margin-top:6px}.tag{border:1px solid #34506f;border-radius:99px;padding:6px 11px;color:#a9d5ff;font-size:12px}
+.layout{display:grid;grid-template-columns:310px 1fr;gap:18px}.panel{background:linear-gradient(180deg,#152238,#111b2c);border:1px solid var(--line);border-radius:16px;padding:20px;box-shadow:0 12px 35px #0003}
+h2{font-size:16px;margin:0 0 16px}.control{margin:17px 0}.label{display:flex;justify-content:space-between;gap:10px;margin-bottom:7px;color:#c8d5e7}.value{font-variant-numeric:tabular-nums;color:var(--accent);font-weight:650}
+input[type=range]{width:100%;accent-color:var(--accent)}.hint{font-size:12px;color:var(--muted);margin-top:4px}
+.buttons{display:flex;gap:9px;margin-top:20px}button{border:1px solid #3c5c80;background:#1b3554;color:white;border-radius:9px;padding:9px 14px;font-weight:650;cursor:pointer}button:hover{background:#25466e}button.secondary{background:transparent;border-color:var(--line);color:#c5d2e4}
+.chart-wrap{height:340px;position:relative}canvas{width:100%;height:100%;display:block}.legend{display:flex;gap:18px;flex-wrap:wrap;color:var(--muted);font-size:12px;margin-top:8px}.dot{display:inline-block;width:9px;height:9px;border-radius:50%;margin-right:6px}.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:10px;margin-top:16px}.stat{background:#0d1727;border:1px solid #22334c;border-radius:11px;padding:12px}.stat small{display:block;color:var(--muted);font-size:11px}.stat strong{font-size:19px;font-variant-numeric:tabular-nums}
+.note{color:var(--muted);font-size:12px;margin-top:18px}.equation{font-family:ui-monospace,monospace;background:#0b1627;border:1px solid #263650;padding:10px;border-radius:9px;color:#c9e3ff;font-size:12px;overflow-wrap:anywhere}
+@media(max-width:760px){.layout{grid-template-columns:1fr}.chart-wrap{height:280px}.stats{grid-template-columns:1fr 1fr 1fr}main{margin:22px auto}}
+</style>
+</head>
+<body>
+<main>
+  <div class="top">
+    <div><h1>PID Playground</h1><div class="sub">Thử chỉnh Kp, Ki, Kd và quan sát đáp ứng bậc thang ngay trên trình duyệt.</div></div>
+    <span class="tag">100% client-side · No backend</span>
+  </div>
+  <div class="layout">
+    <section class="panel">
+      <h2>Thông số bộ điều khiển</h2>
+      <div class="control"><div class="label"><label for="kp">Kp</label><span class="value" id="kpv">2.00</span></div><input id="kp" type="range" min="0" max="12" step=".1" value="2"></div>
+      <div class="control"><div class="label"><label for="ki">Ki</label><span class="value" id="kiv">1.00</span></div><input id="ki" type="range" min="0" max="8" step=".1" value="1"></div>
+      <div class="control"><div class="label"><label for="kd">Kd</label><span class="value" id="kdv">0.20</span></div><input id="kd" type="range" min="0" max="4" step=".05" value=".2"></div>
+      <div class="control"><div class="label"><label for="tau">Hằng số thời gian plant τ</label><span class="value" id="tauv">1.00 s</span></div><input id="tau" type="range" min=".2" max="3" step=".1" value="1"></div>
+      <div class="control"><div class="label"><label for="gain">Plant gain K</label><span class="value" id="gainv">1.00</span></div><input id="gain" type="range" min=".5" max="3" step=".1" value="1"></div>
+      <div class="buttons"><button id="reset">Reset mặc định</button><button class="secondary" id="step">Chạy lại</button></div>
+      <p class="note">Mô hình minh họa: plant bậc nhất G(s) = K / (τs + 1), PID dạng song song. Mô phỏng số bằng Euler, chưa xét bão hòa cơ cấu chấp hành hay anti-windup.</p>
+    </section>
+    <section class="panel">
+      <h2>Đáp ứng đầu ra y(t) với tín hiệu đặt r(t) = 1</h2>
+      <div class="chart-wrap"><canvas id="plot" aria-label="Đồ thị đáp ứng bậc thang"></canvas></div>
+      <div class="legend"><span><i class="dot" style="background:#68b5ff"></i>Đầu ra y(t)</span><span><i class="dot" style="background:#5ed6a0"></i>Giá trị đặt r(t)</span></div>
+      <div class="stats">
+        <div class="stat"><small>Overshoot</small><strong id="overshoot">—</strong></div>
+        <div class="stat"><small>Thời gian xác lập ±2%</small><strong id="settling">—</strong></div>
+        <div class="stat"><small>Sai lệch cuối</small><strong id="error">—</strong></div>
+      </div>
+    </section>
+  </div>
+  <p class="note">Gợi ý: tăng Kp để phản ứng nhanh hơn; Ki giúp khử sai lệch tĩnh nhưng có thể tăng overshoot; Kd thường giúp giảm dao động. Hãy thử từng thông số một để thấy tác động.</p>
+</main>
+<script>
+const ids=["kp","ki","kd","tau","gain"], defaults={kp:2,ki:1,kd:.2,tau:1,gain:1};
+const $=id=>document.getElementById(id);
+let result=[];
+function simulate(){
+  const p=+$("kp").value, i=+$("ki").value, d=+$("kd").value, tau=+$("tau").value, gain=+$("gain").value;
+  ids.forEach(id=>$(id+"v").textContent=(+$(id).value).toFixed(2)+(id==="tau"?" s":""));
+  const dt=.002,T=10,N=Math.floor(T/dt), y=[], u=[];
+  let x=0, integ=0, prevE=1, max=0;
+  for(let n=0;n<=N;n++){
+    const e=1-x; integ+=e*dt;
+    const deriv=(e-prevE)/dt;
+    const control=p*e+i*integ+d*deriv;
+    const dx=(-x+gain*control)/tau;
+    x+=dx*dt; prevE=e;
+    y.push(x);u.push(1);if(x>max)max=x;
+    if(!Number.isFinite(x)||Math.abs(x)>1e4)break;
+  }
+  result={y,u,dt,T,max};
+  const peak=Math.max(...y), final=y[y.length-1];
+  $("overshoot").textContent=Math.max(0,(peak-1)*100).toFixed(1)+"%";
+  $("error").textContent=Math.abs(1-final).toFixed(4);
+  let lastOutside=-1;
+  y.forEach((v,k)=>{if(Math.abs(v-1)>.02)lastOutside=k});
+  $("settling").textContent=lastOutside===y.length-1?"> "+T.toFixed(1)+" s":Math.max(0,lastOutside*dt).toFixed(2)+" s";
+  draw();
+}
+function draw(){
+  const c=$("plot"), rect=c.getBoundingClientRect(), dpr=window.devicePixelRatio||1;
+  c.width=Math.max(1,Math.round(rect.width*dpr));c.height=Math.max(1,Math.round(rect.height*dpr));
+  const ctx=c.getContext("2d");ctx.scale(dpr,dpr);
+  const w=rect.width,h=rect.height,L=48,R=12,T=16,B=30,pw=w-L-R,ph=h-T-B;
+  const vals=result.y||[0,1], ymin=Math.min(-.1,...vals), ymax=Math.max(1.15,...vals);
+  const lo=Math.min(ymin,-.1), hi=Math.min(5,Math.max(ymax,1.15));
+  const X=t=>L+t/10*pw,Y=v=>T+(hi-v)/(hi-lo)*ph;
+  ctx.font="11px system-ui";ctx.lineWidth=1;ctx.strokeStyle="#293b55";ctx.fillStyle="#91a4bd";
+  for(let k=0;k<=5;k++){let v=lo+(hi-lo)*k/5, yy=Y(v);ctx.beginPath();ctx.moveTo(L,yy);ctx.lineTo(w-R,yy);ctx.stroke();ctx.fillText(v.toFixed(1),5,yy+4)}
+  for(let k=0;k<=5;k++){let x=X(k*2);ctx.beginPath();ctx.moveTo(x,T);ctx.lineTo(x,h-B);ctx.stroke();ctx.fillText(String(k*2),x-4,h-9)}
+  ctx.strokeStyle="#5ed6a0";ctx.setLineDash([5,5]);ctx.beginPath();ctx.moveTo(L,Y(1));ctx.lineTo(w-R,Y(1));ctx.stroke();ctx.setLineDash([]);
+  ctx.strokeStyle="#68b5ff";ctx.lineWidth=2;ctx.beginPath();
+  result.y.forEach((v,k)=>{let x=X(k*result.dt),yy=Y(v);if(k===0)ctx.moveTo(x,yy);else ctx.lineTo(x,yy)});ctx.stroke();
+  ctx.fillStyle="#91a4bd";ctx.fillText("t (s)",w-35,h-9);
+}
+ids.forEach(id=>$(id).addEventListener("input",simulate));
+$("reset").addEventListener("click",()=>{ids.forEach(id=>$(id).value=defaults[id]);simulate()});
+$("step").addEventListener("click",simulate);
+window.addEventListener("resize",draw);
+simulate();
+</script>
+</body>
+</html>
